@@ -13,17 +13,18 @@ app.post('/api/jarvis', async (req, res) => {
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-    { role: "system", content: "You are a helpful and conversational AI assistant. Do not prefix your replies with your name or any labels. Just give natural responses." },
-    { role: "user", content: query }
-  ]
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    model: model,
+    messages: [
+      { role: "system", content: "You are a helpful and conversational AI assistant. Do not prefix your replies with your name or any labels. Just give natural responses." },
+      { role: "user", content: query }
+    ]
+  })
 });
 
     const data = await response.json();
