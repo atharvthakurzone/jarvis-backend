@@ -42,4 +42,5 @@ app.post('/api/jarvis', async (req, res) => {
   }
 });
 
-app.listen(3001, () => console.log('Jarvis backend running on http://localhost:3001'));
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`Jarvis backend running on port ${PORT}`));
