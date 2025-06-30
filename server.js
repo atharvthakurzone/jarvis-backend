@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const fetch = require('node-fetch');
 const cors = require('cors');
+const { request } = require('undici');
 require('dotenv').config();
 
 const app = express();
@@ -45,7 +45,7 @@ app.post('/api/jarvis', async (req, res) => {
   ];
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const { body, statusCode, headers } = await request('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -59,48 +59,45 @@ app.post('/api/jarvis', async (req, res) => {
       })
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    if (statusCode !== 200) {
+      const errorText = await body.text();
       console.error("OpenRouter API Error:", errorText);
       return res.status(500).json({ reply: "Jarvis backend failed to stream (HTTP error)." });
     }
 
-    if (supportsStream && response.body && response.headers.get('content-type')?.includes('text/event-stream')) {
+    if (supportsStream && headers['content-type']?.includes('text/event-stream')) {
       res.setHeader('Content-Type', 'text/plain');
 
       let buffer = '';
-
-      response.body.on('data', (chunk) => {
+      for await (const chunk of body) {
         buffer += chunk.toString();
 
         const parts = buffer.split('\n');
-        buffer = parts.pop(); // incomplete part remains
+        buffer = parts.pop(); // retain incomplete
 
         for (const part of parts) {
           const cleaned = part.trim().replace(/^data:\s*/, '');
-          if (cleaned === '[DONE]') return;
+          if (cleaned === '[DONE]') {
+            res.end();
+            return;
+          }
 
           try {
             const json = JSON.parse(cleaned);
             const text = json.choices?.[0]?.delta?.content;
             if (text) res.write(text);
-          } catch (err) {
-            // Ignore JSON parse errors (likely empty lines or partial chunks)
+          } catch {
+            // ignore parse errors
           }
         }
-      });
+      }
 
-      response.body.on('end', () => res.end());
-      response.body.on('error', (err) => {
-        console.error("Stream error:", err);
-        res.end();
-      });
-
+      res.end();
       return;
     }
 
-    // Fallback for models not supporting stream
-    const data = await response.json();
+    // Fallback for non-stream
+    const data = await body.json();
     const reply = data.choices?.[0]?.message?.content || "Sorry, no reply generated.";
     res.json({ reply });
 
