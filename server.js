@@ -24,6 +24,8 @@ app.post('/api/jarvis', async (req, res) => {
     ? "mistralai/mistral-7b-instruct"
     : model;
 
+  console.log("🔁 Using model:", selectedModel);
+
   const systemPromptMap = {
     "jarvis-custom": "You are Jarvis, a personal AI assistant for Deep. Speak naturally and helpfully. Never prefix replies with your name. Remember what Deep tells you and refer back to it if needed.",
     "mistralai/mistral-7b-instruct": "You are a helpful assistant. Reply clearly and briefly. Do not invent features like calendar access, inbox scanning, or meeting schedules unless asked specifically.",
@@ -64,19 +66,14 @@ app.post('/api/jarvis', async (req, res) => {
 
     if (supportsStream && response.body) {
       res.setHeader('Content-Type', 'text/plain');
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
 
       let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
+      response.body.on('data', (chunk) => {
+        buffer += chunk.toString();
 
         const parts = buffer.split('\n');
-        buffer = parts.pop(); // Save incomplete last chunk
+        buffer = parts.pop(); // Save incomplete
 
         for (const part of parts) {
           const cleaned = part.trim().replace(/^data:\s*/, '');
@@ -87,15 +84,21 @@ app.post('/api/jarvis', async (req, res) => {
             const text = json.choices?.[0]?.delta?.content;
             if (text) res.write(text);
           } catch (err) {
-            // Ignore malformed chunks
+            // Ignore parse errors
           }
         }
-      }
+      });
 
-      return res.end();
+      response.body.on('end', () => res.end());
+      response.body.on('error', (err) => {
+        console.error("Stream error:", err);
+        res.end();
+      });
+
+      return;
     }
 
-    // Fallback for non-stream or error
+    // Fallback: non-stream response
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content || "Sorry, no reply generated.";
     res.json({ reply });
