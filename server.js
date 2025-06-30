@@ -9,13 +9,31 @@ app.use(cors());
 app.use(bodyParser.json());
 
 app.post('/api/jarvis', async (req, res) => {
-  const { query, model } = req.body;
+  const { query, model, memoryContext } = req.body;
 
-  if (!query) {
-    return res.status(400).json({ reply: "Missing query." });
+  if (!query || !model) {
+    return res.status(400).json({ reply: "Missing query or model." });
   }
 
-  const selectedModel = model || "openai/gpt-3.5-turbo";
+  // Redirect jarvis-custom to real model
+  const selectedModel = model === "jarvis-custom"
+    ? "mistralai/mistral-7b-instruct"
+    : model;
+
+  console.log("🔁 Using model:", selectedModel);
+
+  const systemPrompt = selectedModel.includes("gemini")
+    ? "You are Gemini, a helpful assistant created by Google."
+    : "You are Jarvis, a personal AI assistant for Deep. Speak naturally and helpfully. Never prefix replies with your name.";
+
+  // Construct messages
+  const messages = [
+    { role: "system", content: systemPrompt },
+    ...(model === "jarvis-custom" && memoryContext
+      ? [{ role: "user", content: memoryContext }]
+      : []),
+    { role: "user", content: query }
+  ];
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -24,19 +42,7 @@ app.post('/api/jarvis', async (req, res) => {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages: [
-          {
-            role: "system",
-            content: "You are Jarvis, a personal AI assistant for Deep. Speak naturally and helpfully. Never prefix replies with your name."
-          },
-          {
-            role: "user",
-            content: query
-          }
-        ]
-      })
+      body: JSON.stringify({ model: selectedModel, messages })
     });
 
     const data = await response.json();
