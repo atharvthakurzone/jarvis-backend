@@ -24,6 +24,8 @@ app.post('/api/jarvis', async (req, res) => {
     ? "mistralai/mistral-7b-instruct"
     : model;
 
+  const supportsStream = STREAM_MODELS.includes(selectedModel);
+
   console.log("🔁 Using model:", selectedModel);
 
   const systemPromptMap = {
@@ -33,6 +35,7 @@ app.post('/api/jarvis', async (req, res) => {
   };
 
   const systemPrompt = systemPromptMap[model] || "You are a helpful assistant.";
+
   const messages = [
     { role: "system", content: systemPrompt },
     ...(model === "jarvis-custom" && memoryContext
@@ -40,8 +43,6 @@ app.post('/api/jarvis', async (req, res) => {
       : []),
     { role: "user", content: query }
   ];
-
-  const supportsStream = STREAM_MODELS.includes(selectedModel);
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -64,7 +65,7 @@ app.post('/api/jarvis', async (req, res) => {
       return res.status(500).json({ reply: "Jarvis backend failed to stream (HTTP error)." });
     }
 
-    if (supportsStream && response.body) {
+    if (supportsStream && response.body && response.headers.get('content-type')?.includes('text/event-stream')) {
       res.setHeader('Content-Type', 'text/plain');
 
       let buffer = '';
@@ -73,7 +74,7 @@ app.post('/api/jarvis', async (req, res) => {
         buffer += chunk.toString();
 
         const parts = buffer.split('\n');
-        buffer = parts.pop(); // Save incomplete
+        buffer = parts.pop(); // incomplete part remains
 
         for (const part of parts) {
           const cleaned = part.trim().replace(/^data:\s*/, '');
@@ -84,7 +85,7 @@ app.post('/api/jarvis', async (req, res) => {
             const text = json.choices?.[0]?.delta?.content;
             if (text) res.write(text);
           } catch (err) {
-            // Ignore parse errors
+            // Ignore JSON parse errors (likely empty lines or partial chunks)
           }
         }
       });
@@ -98,7 +99,7 @@ app.post('/api/jarvis', async (req, res) => {
       return;
     }
 
-    // Fallback: non-stream response
+    // Fallback for models not supporting stream
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content || "Sorry, no reply generated.";
     res.json({ reply });
