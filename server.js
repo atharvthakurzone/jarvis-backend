@@ -49,7 +49,7 @@ app.post('/api/jarvis', async (req, res) => {
       },
       body: JSON.stringify({
         model: selectedModel,
-        max_tokens: 1024,
+        max_tokens: 512,
         messages
       })
     });
