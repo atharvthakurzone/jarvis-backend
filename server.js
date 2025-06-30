@@ -28,7 +28,8 @@ app.post('/api/jarvis', async (req, res) => {
   const selectedModel = model === "jarvis-custom"
     ? "deepseek/deepseek-r1-0528-qwen3-8b:free"
     : model;
-
+  
+  console.log("🔁 Using model:", selectedModel); 
   const supportsStream = STREAM_MODELS.includes(selectedModel);
 
   // 🧠 Load memory context from Supabase
