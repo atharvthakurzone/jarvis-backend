@@ -42,7 +42,7 @@ app.post('/api/jarvis', async (req, res) => {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ model: selectedModel, messages })
+      body: JSON.stringify({   model: selectedModel,   max_tokens: 1024,  messages })
     });
 
     const data = await response.json();
