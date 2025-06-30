@@ -10,7 +10,8 @@ app.use(bodyParser.json());
 
 const STREAM_MODELS = [
   "mistralai/mistral-7b-instruct",
-  "google/gemini-2.5-pro"
+  "google/gemini-2.5-pro",
+  "deepseek/deepseek-r1-0528-qwen3-8b:free"
 ];
 
 app.post('/api/jarvis', async (req, res) => {
@@ -21,7 +22,7 @@ app.post('/api/jarvis', async (req, res) => {
   }
 
   const selectedModel = model === "jarvis-custom"
-    ? "mistralai/mistral-7b-instruct"
+    ? "deepseek/deepseek-r1-0528-qwen3-8b:free"
     : model;
 
   const supportsStream = STREAM_MODELS.includes(selectedModel);
