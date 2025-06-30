@@ -15,14 +15,12 @@ app.post('/api/jarvis', async (req, res) => {
     return res.status(400).json({ reply: "Missing query or model." });
   }
 
-  // Map custom model alias
   const selectedModel = model === "jarvis-custom"
     ? "mistralai/mistral-7b-instruct"
     : model;
 
   console.log("🔁 Using model:", selectedModel);
 
-  // Use specific system prompt per model
   const systemPromptMap = {
     "jarvis-custom": "You are Jarvis, a personal AI assistant for Deep. Speak naturally and helpfully. Never prefix replies with your name. Remember what Deep tells you and refer back to it if needed.",
     "mistralai/mistral-7b-instruct": "You are a helpful assistant. Reply clearly and briefly. Do not invent features like calendar access, inbox scanning, or meeting schedules unless asked specifically.",
@@ -31,7 +29,6 @@ app.post('/api/jarvis', async (req, res) => {
 
   const systemPrompt = systemPromptMap[model] || "You are a helpful assistant.";
 
-  // Construct messages
   const messages = [
     { role: "system", content: systemPrompt },
     ...(model === "jarvis-custom" && memoryContext
@@ -49,24 +46,49 @@ app.post('/api/jarvis', async (req, res) => {
       },
       body: JSON.stringify({
         model: selectedModel,
-        max_tokens: 512,
-        messages
+        stream: true,
+        messages,
+        max_tokens: 1024
       })
     });
 
-    const data = await response.json();
-
-    if (!data.choices || !data.choices[0]?.message?.content) {
-      console.error("OpenRouter API error:", data);
-      return res.json({ reply: "Sorry, Jarvis had a problem understanding that." });
+    if (!response.ok || !response.body) {
+      const err = await response.text();
+      console.error("OpenRouter error:", err);
+      return res.status(500).json({ reply: "Streaming error from OpenRouter." });
     }
 
-    const reply = data.choices[0].message.content.trim();
-    res.json({ reply });
+    res.setHeader('Content-Type', 'text/plain');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const chunks = buffer.split("data: ").filter(Boolean);
+      for (let chunk of chunks) {
+        if (chunk.includes('[DONE]')) return;
+
+        try {
+          const json = JSON.parse(chunk.trim());
+          const text = json.choices?.[0]?.delta?.content;
+          if (text) res.write(text);
+        } catch (err) {
+          console.error("JSON stream error:", err);
+        }
+      }
+    }
+
+    res.end();
 
   } catch (err) {
-    console.error("Backend error:", err);
-    res.status(500).json({ reply: "Jarvis encountered an error." });
+    console.error("Backend stream error:", err);
+    res.status(500).json({ reply: "Jarvis backend failed to stream." });
   }
 });
 
